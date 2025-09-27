@@ -170,8 +170,25 @@ export const handler = async (event, context) => {
             productTitle: data.product?.title,
             hasVariants: !!data.product?.variants,
             variantsCount: data.product?.variants?.length || 0,
-            dataKeys: Object.keys(data || {})
+            dataKeys: Object.keys(data || {}),
+            productKeys: data.product ? Object.keys(data.product) : []
         });
+
+        // Log específico para variantes
+        if (data.product?.variants) {
+            console.log('🔍 [VARIANTS_DEBUG]', {
+                variantsIsArray: Array.isArray(data.product.variants),
+                variantsLength: data.product.variants.length,
+                firstVariant: data.product.variants[0] ? {
+                    id: data.product.variants[0].id,
+                    size: data.product.variants[0].size,
+                    lowest_ask: data.product.variants[0].lowest_ask,
+                    total_asks: data.product.variants[0].total_asks
+                } : null
+            });
+        } else {
+            console.log('❌ [NO_VARIANTS_IN_RESPONSE]');
+        }
 
         // Log de la estructura completa de datos recibidos
         console.log('🔍 [RAW_DATA_STRUCTURE]', {
@@ -226,7 +243,9 @@ export const handler = async (event, context) => {
             productTitle: product.title,
             hasVariants: !!product.variants,
             variantsCount: product.variants?.length || 0,
-            productKeys: Object.keys(product || {})
+            productKeys: Object.keys(product || {}),
+            variantsIsArray: Array.isArray(product.variants),
+            variantsSample: product.variants ? product.variants.slice(0, 2) : null
         });
 
         // Normalizar datos del producto con flexibilidad
@@ -243,7 +262,8 @@ export const handler = async (event, context) => {
                 max_price: product.max_price,
                 weekly_orders: product.weekly_orders,
                 updated_at: product.updated_at,
-                allFields: Object.keys(product)
+                allFields: Object.keys(product),
+                originalVariants: product.variants ? product.variants.length : 0
             }
         };
 
@@ -254,7 +274,9 @@ export const handler = async (event, context) => {
             normalizedTitle: normalizedData.title,
             hasImage: !!normalizedData.image,
             regularPrice: normalizedData.regularPrice,
-            variantsCount: normalizedData.variants.length
+            originalVariantsCount: product.variants ? product.variants.length : 0,
+            normalizedVariantsCount: normalizedData.variants.length,
+            variantsPreserved: normalizedData.variants.length > 0
         });
 
         // Log detallado de variantes si existen
@@ -269,10 +291,22 @@ export const handler = async (event, context) => {
             })));
         } else {
             console.log('⚠️ [NO_VARIANTS] Producto sin variantes de talla');
+            console.log('🔍 [DEBUG_VARIANTS]', {
+                productHasVariants: !!product.variants,
+                productVariantsLength: product.variants ? product.variants.length : 0,
+                productVariantsType: typeof product.variants,
+                productKeys: Object.keys(product)
+            });
         }
 
-        // Respuesta exitosa
+        // Respuesta exitosa - ASEGURAR QUE LAS VARIANTES SE PRESERVEN
         console.log('✅ [SUCCESS] Datos normalizados listos para enviar');
+        console.log('📤 [FINAL_CHECK]', {
+            finalVariantsCount: normalizedData.variants.length,
+            finalDataKeys: Object.keys(normalizedData),
+            hasVariantsInFinalData: !!normalizedData.variants && normalizedData.variants.length > 0
+        });
+
         return {
             statusCode: 200,
             headers: {
