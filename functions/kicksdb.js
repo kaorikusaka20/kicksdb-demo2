@@ -173,9 +173,40 @@ export const handler = async (event, context) => {
             dataKeys: Object.keys(data || {})
         });
 
-        // Validar estructura de respuesta
-        if (!data.product) {
-            console.log('❌ [DATA_ERROR] No se encontró el producto en la respuesta');
+        // Log de la estructura completa de datos recibidos
+        console.log('🔍 [RAW_DATA_STRUCTURE]', {
+            dataKeys: Object.keys(data || {}),
+            hasProduct: !!data.product,
+            hasData: !!data.data,
+            hasMeta: !!data.meta,
+            hasSchema: !!data.$schema,
+            fullStructure: JSON.stringify(data, null, 2).substring(0, 500)
+        });
+
+        // Intentar diferentes estructuras de respuesta de KicksDB
+        let product = null;
+
+        if (data.product) {
+            // Estructura: { product: {...} }
+            product = data.product;
+            console.log('✅ [STRUCTURE] Usando data.product');
+        } else if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+            // Estructura: { data: {...} }
+            product = data.data;
+            console.log('✅ [STRUCTURE] Usando data.data');
+        } else if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+            // Estructura: { data: [{...}] }
+            product = data.data[0];
+            console.log('✅ [STRUCTURE] Usando data.data[0]');
+        } else if (data.id && data.title) {
+            // Estructura: datos directos en root
+            product = data;
+            console.log('✅ [STRUCTURE] Usando datos en root');
+        }
+
+        if (!product) {
+            console.log('❌ [DATA_ERROR] No se pudo extraer el producto de la respuesta');
+            console.log('🔍 [DEBUG_DATA]', JSON.stringify(data, null, 2));
             return {
                 statusCode: 404,
                 headers: {
@@ -183,48 +214,61 @@ export const handler = async (event, context) => {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    error: 'Product not found',
-                    message: `No se encontró un producto con ID: ${id}`,
-                    receivedData: Object.keys(data || {})
+                    error: 'Product structure not recognized',
+                    message: `No se pudo interpretar la estructura de datos para ID: ${id}`,
+                    receivedData: Object.keys(data || {}),
+                    debugData: data
                 })
             };
         }
+        console.log('✅ [PRODUCT_FOUND]', {
+            productId: product.id,
+            productTitle: product.title,
+            hasVariants: !!product.variants,
+            variantsCount: product.variants?.length || 0,
+            productKeys: Object.keys(product || {})
+        });
 
-        // Normalizar datos del producto
-        const product = data.product;
+        // Normalizar datos del producto con flexibilidad
         const normalizedData = {
-            id: product.id,
-            title: product.title || 'Sin título',
-            image: product.image || null,
-            sku: product.sku || product.id,
+            id: product.id || id,
+            title: product.title || product.name || 'Sin título',
+            image: product.image || product.imageUrl || product.thumbnail || null,
+            sku: product.sku || product.id || id,
             lastUpdated: new Date().toISOString(),
-            regularPrice: product.min_price || 0,
-            variants: product.variants || [],
+            regularPrice: product.min_price || product.minPrice || product.price || 0,
+            variants: product.variants || product.sizes || [],
             rawData: {
                 min_price: product.min_price,
                 max_price: product.max_price,
                 weekly_orders: product.weekly_orders,
-                updated_at: product.updated_at
+                updated_at: product.updated_at,
+                allFields: Object.keys(product)
             }
         };
 
         console.log('🔄 [NORMALIZATION]', {
-            originalVariants: product.variants?.length || 0,
+            originalId: product.id,
             normalizedId: normalizedData.id,
+            originalTitle: product.title,
             normalizedTitle: normalizedData.title,
             hasImage: !!normalizedData.image,
-            regularPrice: normalizedData.regularPrice
+            regularPrice: normalizedData.regularPrice,
+            variantsCount: normalizedData.variants.length
         });
 
-        // Log detallado de variantes
-        if (normalizedData.variants.length > 0) {
+        // Log detallado de variantes si existen
+        if (normalizedData.variants && normalizedData.variants.length > 0) {
             const variantSample = normalizedData.variants.slice(0, 3);
             console.log('📋 [VARIANTS_SAMPLE]', variantSample.map(v => ({
                 size: v.size,
                 lowest_ask: v.lowest_ask,
+                highest_bid: v.highest_bid,
                 total_asks: v.total_asks,
-                available: v.lowest_ask > 0 && v.total_asks > 0
+                available: (v.lowest_ask > 0 && v.total_asks > 0) || v.available
             })));
+        } else {
+            console.log('⚠️ [NO_VARIANTS] Producto sin variantes de talla');
         }
 
         // Respuesta exitosa
