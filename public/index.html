@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KicksDB Product Viewer</title>
+    <title>KicksDB Product Viewer - CORREGIDO</title>
     <style>
         * {
             margin: 0;
@@ -323,6 +323,43 @@
             background: rgba(210, 153, 34, 0.1);
         }
 
+        /* Debug Info Panel */
+        .debug-panel {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .debug-panel h4 {
+            color: #00d4aa;
+            margin-bottom: 15px;
+        }
+
+        .debug-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+
+        .debug-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .debug-label {
+            color: #b3b3b3;
+            font-weight: 600;
+        }
+
+        .debug-value {
+            color: #ffffff;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .product-layout {
@@ -349,8 +386,8 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>KicksDB Product Viewer</h1>
-            <p>Ingresa el ID del producto para cargar información en tiempo real desde KicksDB API</p>
+            <h1>KicksDB Product Viewer - CORREGIDO</h1>
+            <p>Estructura corregida para la nueva API de KicksDB - Ahora con transformación de precios a variantes</p>
         </div>
 
         <!-- Search Section -->
@@ -362,7 +399,7 @@
                         type="text" 
                         id="productId" 
                         placeholder="Ej: f1938d29-48da-47eb-a5f8-619a2d8443ca"
-                        value="">
+                        value="f1938d29-48da-47eb-a5f8-619a2d8443ca">
                 </div>
                 <button class="search-btn" id="searchBtn">Buscar Producto</button>
             </div>
@@ -398,6 +435,10 @@
                             <span class="meta-label">Tallas Disponibles:</span>
                             <span class="meta-value" id="availableSizes">-</span>
                         </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Fuente de Datos:</span>
+                            <span class="meta-value" id="dataSource">-</span>
+                        </div>
                     </div>
 
                     <div class="sizes-section">
@@ -413,6 +454,14 @@
                         <p id="selectedSize">-</p>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Debug Info Panel -->
+        <div class="debug-panel" id="debugPanel" style="display: none;">
+            <h4>Información de Depuración</h4>
+            <div class="debug-info" id="debugInfo">
+                <!-- Debug information will be added here -->
             </div>
         </div>
 
@@ -460,6 +509,33 @@
             debugContainer.scrollTop = debugContainer.scrollHeight;
         }
 
+        function updateDebugPanel(product) {
+            const debugPanel = document.getElementById('debugPanel');
+            const debugInfo = document.getElementById('debugInfo');
+            
+            if (!product || !product.debug) {
+                debugPanel.style.display = 'none';
+                return;
+            }
+            
+            debugPanel.style.display = 'block';
+            
+            const debugData = {
+                'Fuente de Transformación': product.debug.transformationSource || 'desconocida',
+                'Tenía Variantes Originales': product.debug.originalHasVariants ? 'Sí' : 'No',
+                'Tenía Precios Originales': product.debug.originalHasPrices ? 'Sí' : 'No',
+                'Total de Variantes': product.debug.variantsCount || 0,
+                'Timestamp': product.debug.timestamp || 'desconocido'
+            };
+            
+            debugInfo.innerHTML = Object.entries(debugData).map(([key, value]) => `
+                <div class="debug-item">
+                    <span class="debug-label">${key}:</span>
+                    <span class="debug-value">${value}</span>
+                </div>
+            `).join('');
+        }
+
         function showStatus(message, type = 'info') {
             const container = document.getElementById('statusContainer');
             container.innerHTML = `<div class="status ${type}">${message}</div>`;
@@ -500,6 +576,7 @@
             
             // Ocultar producto anterior
             document.getElementById('productContainer').classList.remove('show');
+            document.getElementById('debugPanel').style.display = 'none';
 
             try {
                 log('Construyendo URL de la API', 'info');
@@ -512,8 +589,7 @@
                 log('Respuesta recibida', 'info', { 
                     status: response.status,
                     statusText: response.statusText,
-                    ok: response.ok,
-                    headers: Object.fromEntries(response.headers.entries())
+                    ok: response.ok
                 });
 
                 if (!response.ok) {
@@ -526,7 +602,8 @@
                 log('Datos JSON parseados exitosamente', 'success', { 
                     productId: data.id,
                     title: data.title,
-                    variantsCount: data.variants?.length || 0
+                    variantsCount: data.variants?.length || 0,
+                    debugInfo: data.debug || 'No hay info de debug'
                 });
 
                 currentProduct = data;
@@ -550,8 +627,8 @@
         function displayProduct(product) {
             log('Iniciando displayProduct', 'info', { 
                 productId: product.id,
-                hasVariants: !!product.variants,
-                variantsLength: product.variants ? product.variants.length : 0
+                variantsCount: product.variants?.length || 0,
+                debugInfo: product.debug || 'No disponible'
             });
 
             try {
@@ -560,6 +637,7 @@
                 document.getElementById('productIdDisplay').textContent = product.id;
                 document.getElementById('productSku').textContent = product.sku || product.id;
                 document.getElementById('regularPrice').textContent = formatPrice(product.regularPrice);
+                document.getElementById('dataSource').textContent = product.debug?.transformationSource || 'legacy';
                 
                 // Imagen del producto
                 const imageElement = document.getElementById('productImage');
@@ -573,21 +651,12 @@
                     log('Imagen por defecto establecida (no hay imagen en los datos)', 'warning');
                 }
 
-                // Debug de las variantes que llegan del servidor
-                log('Datos de producto recibidos del servidor', 'info', {
-                    productKeys: Object.keys(product),
-                    hasVariants: !!product.variants,
-                    variantsType: typeof product.variants,
-                    variantsIsArray: Array.isArray(product.variants),
-                    variantsLength: product.variants ? product.variants.length : 0,
-                    variantsSample: product.variants ? product.variants.slice(0, 2) : null
-                });
-
                 // Procesar variantes/tallas
                 displaySizes(product.variants || []);
                 
-                // Mostrar contenedor del producto
+                // Mostrar contenedor del producto y panel de debug
                 document.getElementById('productContainer').classList.add('show');
+                updateDebugPanel(product);
                 
                 log('Producto mostrado exitosamente', 'success');
 
@@ -603,14 +672,7 @@
         function displaySizes(variants) {
             log('Iniciando displaySizes', 'info', { 
                 variantsCount: variants.length,
-                variantsType: typeof variants,
-                variantsIsArray: Array.isArray(variants),
-                sampleVariant: variants[0] ? {
-                    id: variants[0].id,
-                    size: variants[0].size,
-                    lowest_ask: variants[0].lowest_ask,
-                    total_asks: variants[0].total_asks
-                } : null
+                sample: variants.slice(0, 3).map(v => ({ size: v.size, price: v.lowest_ask }))
             });
 
             const sizesGrid = document.getElementById('sizesGrid');
@@ -619,7 +681,7 @@
             if (!variants || variants.length === 0) {
                 sizesGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #999; padding: 20px;">No hay tallas disponibles en la API</div>';
                 document.getElementById('availableSizes').textContent = '0';
-                log('No hay variantes en los datos', 'warning');
+                log('No hay variantes disponibles', 'warning');
                 return;
             }
 
@@ -645,7 +707,8 @@
                     size: variant.size,
                     lowest_ask: variant.lowest_ask,
                     total_asks: variant.total_asks,
-                    available: isAvailable
+                    available: isAvailable,
+                    source: variant._source || 'legacy'
                 });
 
                 const sizeButton = document.createElement('div');
@@ -730,13 +793,13 @@
         });
 
         // Inicialización
-        log('Aplicación inicializada correctamente', 'success', {
+        log('Aplicación inicializada correctamente - ESTRUCTURA CORREGIDA', 'success', {
             timestamp: new Date().toISOString(),
             userAgent: navigator.userAgent,
             location: window.location.href
         });
 
-        // Ejemplo de IDs para testing (puedes comentar esta parte)
+        // Ejemplo de IDs para testing
         const exampleIds = [
             'f1938d29-48da-47eb-a5f8-619a2d8443ca',
             'dbb27df3-bb6e-4a7a-ba38-1bbb5f5a022a', 
@@ -744,6 +807,12 @@
         ];
         
         log('IDs de ejemplo disponibles para testing', 'info', { exampleIds });
+
+        // Auto-búsqueda de ejemplo (opcional - puedes comentar esto)
+        setTimeout(() => {
+            log('Realizando búsqueda automática de ejemplo...', 'info');
+            // searchProduct(); // Descomenta si quieres que busque automáticamente
+        }, 1000);
 
     </script>
 </body>
