@@ -548,7 +548,11 @@
         }
 
         function displayProduct(product) {
-            log('Iniciando displayProduct', 'info', { productId: product.id });
+            log('Iniciando displayProduct', 'info', { 
+                productId: product.id,
+                hasVariants: !!product.variants,
+                variantsLength: product.variants ? product.variants.length : 0
+            });
 
             try {
                 // Actualizar información básica
@@ -568,6 +572,16 @@
                     imageElement.alt = 'Imagen no disponible';
                     log('Imagen por defecto establecida (no hay imagen en los datos)', 'warning');
                 }
+
+                // Debug de las variantes que llegan del servidor
+                log('Datos de producto recibidos del servidor', 'info', {
+                    productKeys: Object.keys(product),
+                    hasVariants: !!product.variants,
+                    variantsType: typeof product.variants,
+                    variantsIsArray: Array.isArray(product.variants),
+                    variantsLength: product.variants ? product.variants.length : 0,
+                    variantsSample: product.variants ? product.variants.slice(0, 2) : null
+                });
 
                 // Procesar variantes/tallas
                 displaySizes(product.variants || []);
