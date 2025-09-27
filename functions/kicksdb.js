@@ -1,7 +1,8 @@
 // functions/kicksdb.js
-// Netlify Function para conectar con KicksDB API Pro - ESTRUCTURA CORREGIDA
+// Netlify Function para conectar con KicksDB API Pro
+// Solo datos reales, sin fallbacks
 
-console.log('🚀 [KICKSDB FUNCTION] Iniciando función - ESTRUCTURA CORREGIDA');
+console.log('🚀 [KICKSDB FUNCTION] Iniciando función');
 
 export const handler = async (event, context) => {
     // Log inicial con todos los detalles del evento
@@ -169,8 +170,6 @@ export const handler = async (event, context) => {
             productTitle: data.product?.title,
             hasVariants: !!data.product?.variants,
             variantsCount: data.product?.variants?.length || 0,
-            hasPrices: !!data.product?.prices,
-            pricesKeys: data.product?.prices ? Object.keys(data.product.prices) : [],
             dataKeys: Object.keys(data || {})
         });
 
@@ -191,68 +190,8 @@ export const handler = async (event, context) => {
             };
         }
 
-        // --- CORRECCIÓN CRÍTICA: TRANSFORMAR ESTRUCTURA DE PRECIOS A VARIANTES ---
-        const product = data.product;
-        let variants = [];
-
-        console.log('🔄 [TRANSFORM_START] Transformando estructura de datos');
-
-        // 1. Primero intentar usar la estructura legacy (variants) si existe
-        if (product.variants && Array.isArray(product.variants) && product.variants.length > 0) {
-            console.log('✅ [LEGACY_STRUCTURE] Usando estructura legacy de variants');
-            variants = product.variants;
-        }
-        // 2. Si no hay variants, usar la nueva estructura de prices
-        else if (product.prices && typeof product.prices === 'object') {
-            console.log('💰 [NEW_STRUCTURE] Transformando estructura de prices a variants');
-            
-            const currencyKeys = Object.keys(product.prices);
-            console.log('🌍 [CURRENCIES] Monedas disponibles:', currencyKeys);
-            
-            if (currencyKeys.length > 0) {
-                // Usar la primera moneda disponible (ej: 'USD_US')
-                const primaryCurrency = currencyKeys[0];
-                const priceMap = product.prices[primaryCurrency];
-                
-                console.log('🔢 [PRICE_MAP] Mapa de precios:', {
-                    currency: primaryCurrency,
-                    sizesCount: priceMap ? Object.keys(priceMap).length : 0,
-                    sampleSizes: priceMap ? Object.keys(priceMap).slice(0, 5) : []
-                });
-
-                if (priceMap && typeof priceMap === 'object') {
-                    // Convertir objeto de precios a array de variantes
-                    variants = Object.entries(priceMap).map(([size, price]) => {
-                        return {
-                            size: size,
-                            lowest_ask: price,
-                            // Si el precio es mayor a 0, hay stock disponible
-                            total_asks: price > 0 ? 1 : 0,
-                            _source: 'prices_transformation',
-                            _currency: primaryCurrency
-                        };
-                    });
-                    
-                    console.log(`✅ [TRANSFORM_SUCCESS] Convertidas ${variants.length} tallas desde prices`);
-                } else {
-                    console.log('❌ [PRICE_MAP_ERROR] priceMap no es un objeto válido');
-                    variants = [];
-                }
-            } else {
-                console.log('❌ [NO_CURRENCIES] No se encontraron monedas en prices');
-                variants = [];
-            }
-        } else {
-            console.log('❌ [NO_STRUCTURE] No se encontró estructura de variants ni prices');
-            variants = [];
-        }
-
-        console.log('📊 [VARIANTS_FINAL]', {
-            totalVariants: variants.length,
-            sample: variants.slice(0, 3).map(v => ({ size: v.size, price: v.lowest_ask }))
-        });
-
         // Normalizar datos del producto
+        const product = data.product;
         const normalizedData = {
             id: product.id,
             title: product.title || 'Sin título',
@@ -260,26 +199,17 @@ export const handler = async (event, context) => {
             sku: product.sku || product.id,
             lastUpdated: new Date().toISOString(),
             regularPrice: product.min_price || 0,
-            variants: variants, // USAMOS LAS VARIANTES TRANSFORMADAS
+            variants: product.variants || [],
             rawData: {
                 min_price: product.min_price,
                 max_price: product.max_price,
                 weekly_orders: product.weekly_orders,
-                updated_at: product.updated_at,
-                transformation: variants.length > 0 ? variants[0]._source : 'none'
-            },
-            debug: {
-                transformationSource: variants.length > 0 ? variants[0]._source : 'none',
-                originalHasVariants: !!product.variants,
-                originalHasPrices: !!product.prices,
-                variantsCount: variants.length,
-                timestamp: new Date().toISOString()
+                updated_at: product.updated_at
             }
         };
 
-        console.log('🔄 [NORMALIZATION_COMPLETE]', {
+        console.log('🔄 [NORMALIZATION]', {
             originalVariants: product.variants?.length || 0,
-            transformedVariants: normalizedData.variants.length,
             normalizedId: normalizedData.id,
             normalizedTitle: normalizedData.title,
             hasImage: !!normalizedData.image,
@@ -288,16 +218,13 @@ export const handler = async (event, context) => {
 
         // Log detallado de variantes
         if (normalizedData.variants.length > 0) {
-            const variantSample = normalizedData.variants.slice(0, 5);
+            const variantSample = normalizedData.variants.slice(0, 3);
             console.log('📋 [VARIANTS_SAMPLE]', variantSample.map(v => ({
                 size: v.size,
                 lowest_ask: v.lowest_ask,
                 total_asks: v.total_asks,
-                available: v.lowest_ask > 0 && v.total_asks > 0,
-                source: v._source || 'legacy'
+                available: v.lowest_ask > 0 && v.total_asks > 0
             })));
-        } else {
-            console.log('❌ [NO_VARIANTS] No se pudieron obtener variantes del producto');
         }
 
         // Respuesta exitosa
