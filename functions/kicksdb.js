@@ -82,7 +82,7 @@ const handler = async (event, context) => {
         console.log(`✅ [RAW_JSON] Parseado exitosamente`);
         console.log(`🔍 [RAW_KEYS] ${Object.keys(rawData).join(', ')}`);
 
-        // Extraer producto
+                // Extraer producto
         const product = rawData.product;
         if (!product) {
             console.log(`❌ [NO_PRODUCT] No se encontró 'product' en la respuesta`);
@@ -100,14 +100,49 @@ const handler = async (event, context) => {
 
         console.log(`✅ [PRODUCT] ID: ${product.id}, Title: ${product.title}`);
         
-        // Verificar variantes ANTES de procesar
-        const rawVariants = product.variants;
-        console.log(`📊 [VARIANTS_RAW] Exists: ${!!rawVariants}, Type: ${typeof rawVariants}, IsArray: ${Array.isArray(rawVariants)}, Length: ${rawVariants ? rawVariants.length : 0}`);
+        // --- INICIO DE LA TRANSFORMACIÓN DE VARIANTES ---
+        let rawVariants = [];
 
-        if (rawVariants && Array.isArray(rawVariants) && rawVariants.length > 0) {
-            console.log(`✅ [VARIANTS_FOUND] Total: ${rawVariants.length}`);
-            
-            // Log de las primeras 3 variantes
+        // Intentar obtener variantes de la antigua estructura (product.variants)
+        if (product.variants && Array.isArray(product.variants) && product.variants.length > 0) {
+            rawVariants = product.variants;
+            console.log(`✅ [VARIANTS_LEGACY] Usando variantes de la estructura legacy. Total: ${rawVariants.length}`);
+        } 
+        // Si no hay variantes en la estructura legacy, intentar con la nueva estructura (product.prices)
+        else if (product.prices && typeof product.prices === 'object') {
+            console.log(`🔍 [PRICES_STRUCTURE] Intentando obtener variantes de prices. Claves de moneda:`, Object.keys(product.prices));
+
+            // Tomar la primera moneda disponible (ej: 'USD_US')
+            const currencyKeys = Object.keys(product.prices);
+            if (currencyKeys.length > 0) {
+                const primaryCurrency = currencyKeys[0];
+                const priceMap = product.prices[primaryCurrency];
+                console.log(`🔢 [PRICE_MAP] Mapa de precios para ${primaryCurrency}:`, priceMap);
+
+                // Convertir el objeto de precios en un array de variantes.
+                // El objeto priceMap tiene la forma: { "9.5": 150, "10": 175 }
+                rawVariants = Object.keys(priceMap).map(size => {
+                    const lowest_ask = priceMap[size];
+                    return {
+                        size: size,
+                        lowest_ask: lowest_ask,
+                        // Si el precio es 0, no hay stock disponible.
+                        total_asks: lowest_ask > 0 ? 1 : 0
+                    };
+                });
+                console.log(`🔄 [VARIANTS_CREATED] Se crearon ${rawVariants.length} variantes desde prices.`);
+            } else {
+                console.log(`❌ [NO_CURRENCY_KEYS] No se encontraron claves de moneda en prices.`);
+            }
+        } else {
+            console.log(`❌ [NO_VARIANTS] No se encontraron variantes en ninguna estructura.`);
+        }
+
+        console.log(`📊 [VARIANTS_FINAL] Total de variantes: ${rawVariants.length}`);
+        // --- FIN DE LA TRANSFORMACIÓN DE VARIANTES ---
+
+        // Log de las primeras 3 variantes
+        if (rawVariants.length > 0) {
             const sampleVariants = rawVariants.slice(0, 3);
             sampleVariants.forEach((variant, index) => {
                 console.log(`🔍 [VARIANT_${index + 1}] Size: ${variant.size}, Ask: $${variant.lowest_ask}, Total: ${variant.total_asks}, Available: ${variant.lowest_ask > 0 && variant.total_asks > 0}`);
@@ -120,6 +155,41 @@ const handler = async (event, context) => {
             console.log(`❌ [NO_VARIANTS] Sin variantes válidas`);
         }
 
+        // Crear respuesta normalizada
+        const responseData = {
+            id: product.id,
+            title: product.title,
+            image: product.image,
+            sku: product.sku,
+            lastUpdated: new Date().toISOString(),
+            regularPrice: product.min_price || 0,
+            variants: rawVariants, // Usamos las variantes transformadas
+            debug: {
+                requestedId: id,
+                returnedId: product.id,
+                originalVariantsCount: rawVariants.length,
+                timestampProcessed: new Date().toISOString(),
+                apiUrl: apiUrl,
+                // Incluimos información sobre la estructura de precios por si acaso
+                pricesCurrencyKeys: product.prices ? Object.keys(product.prices) : [],
+                usedLegacyVariants: !!(product.variants && Array.isArray(product.variants) && product.variants.length > 0)
+            }
+        };
+
+        console.log(`✅ [RESPONSE_READY] Final variants: ${responseData.variants.length}`);
+        console.log(`📤 [SENDING] ID: ${responseData.id}, Title: ${responseData.title}, Variants: ${responseData.variants.length}`);
+
+        return {
+            statusCode: 200,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate', // SIN CACHÉ
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            },
+            body: JSON.stringify(responseData)
+        };
         // Crear respuesta normalizada - PRESERVAR VARIANTES EXACTAS
         const responseData = {
             id: product.id,
