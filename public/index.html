@@ -601,22 +601,32 @@
         }
 
         function displaySizes(variants) {
-            log('Iniciando displaySizes', 'info', { variantsCount: variants.length });
+            log('Iniciando displaySizes', 'info', { 
+                variantsCount: variants.length,
+                variantsType: typeof variants,
+                variantsIsArray: Array.isArray(variants),
+                sampleVariant: variants[0] ? {
+                    id: variants[0].id,
+                    size: variants[0].size,
+                    lowest_ask: variants[0].lowest_ask,
+                    total_asks: variants[0].total_asks
+                } : null
+            });
 
             const sizesGrid = document.getElementById('sizesGrid');
             sizesGrid.innerHTML = '';
 
             if (!variants || variants.length === 0) {
-                sizesGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #999; padding: 20px;">No hay tallas disponibles</div>';
+                sizesGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #999; padding: 20px;">No hay tallas disponibles en la API</div>';
                 document.getElementById('availableSizes').textContent = '0';
-                log('No hay variantes disponibles', 'warning');
+                log('No hay variantes en los datos', 'warning');
                 return;
             }
 
             let availableCount = 0;
 
             // Ordenar tallas numéricamente
-            const sortedVariants = variants.sort((a, b) => {
+            const sortedVariants = [...variants].sort((a, b) => {
                 const sizeA = parseFloat(a.size) || 0;
                 const sizeB = parseFloat(b.size) || 0;
                 return sizeA - sizeB;
@@ -649,7 +659,7 @@
                     sizeButton.addEventListener('click', () => selectSize(variant));
                     log(`Talla US ${variant.size} habilitada para selección`, 'success');
                 } else {
-                    sizeButton.title = 'Talla no disponible';
+                    sizeButton.title = 'Talla agotada - Sin stock en StockX';
                     log(`Talla US ${variant.size} deshabilitada (sin stock)`, 'warning');
                 }
 
