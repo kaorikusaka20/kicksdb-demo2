@@ -164,15 +164,43 @@ export const handler = async (event, context) => {
         // Parsear respuesta JSON
         const data = await response.json();
         
-        console.log('✅ [JSON_PARSED]', {
+        console.log('✅ [JSON_PARSED_INITIAL]', {
             hasProduct: !!data.product,
             productId: data.product?.id,
             productTitle: data.product?.title,
-            hasVariants: !!data.product?.variants,
-            variantsCount: data.product?.variants?.length || 0,
-            dataKeys: Object.keys(data || {}),
-            productKeys: data.product ? Object.keys(data.product) : []
+            dataKeys: Object.keys(data || {})
         });
+
+        // Log de la estructura completa de datos recibidos ANTES de cualquier procesamiento
+        console.log('🔍 [RAW_DATA_STRUCTURE]', {
+            dataKeys: Object.keys(data || {}),
+            hasProduct: !!data.product,
+            hasData: !!data.data,
+            hasMeta: !!data.meta,
+            hasSchema: !!data.$schema,
+            fullStructure: JSON.stringify(data, null, 2).substring(0, 1000)
+        });
+
+        // Intentar diferentes estructuras de respuesta de KicksDB
+        let product = null;
+
+        if (data.product) {
+            // Estructura: { product: {...} }
+            product = data.product;
+            console.log('✅ [STRUCTURE] Usando data.product');
+        } else if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+            // Estructura: { data: {...} }
+            product = data.data;
+            console.log('✅ [STRUCTURE] Usando data.data');
+        } else if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+            // Estructura: { data: [{...}] }
+            product = data.data[0];
+            console.log('✅ [STRUCTURE] Usando data.data[0]');
+        } else if (data.id && data.title) {
+            // Estructura: datos directos en root
+            product = data;
+            console.log('✅ [STRUCTURE] Usando datos en root');
+        }
 
         // Log específico para variantes
         if (data.product?.variants) {
